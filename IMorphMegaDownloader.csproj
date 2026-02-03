@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <OutputPath>bin\$(Configuration)\</OutputPath>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <AssemblyName>IMorphManager</AssemblyName>
+    <RootNamespace>IMorphMegaDownloader</RootNamespace>
+    <Company>Watchlord</Company>
+    <Product>iMorph Manager v1.0.0 by Watchlord</Product>
+    <Copyright>Copyright © Watchlord</Copyright>
+    <Version>1.0.0</Version>
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <FileVersion>1.0.0.0</FileVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MegaApiClient" Version="1.10.5" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="iMorph Logo.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="iMorph Logo.png" />
+  </ItemGroup>
+
+</Project>
