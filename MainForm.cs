@@ -53,11 +53,23 @@ namespace IMorphMegaDownloader
         private TextBox latestFileInfo = null!;
         private Label downloadPathLabel = null!;
         private Button browseFolderButton = null!;
+
+        // Region filter (Regular vs China)
         private RadioButton regularVersionRadio = null!;
         private RadioButton chinaVersionRadio = null!;
-        private RadioButton regularTypeRadio = null!;
-        private RadioButton menuTypeRadio = null!;
-        private RadioButton netTypeRadio = null!;
+
+        // WoW version filter (client version)
+        // Regular region: 1.x.x (Classic Era), 2.x.x (TBC Classic), 5.x.x (MoP Classic), 12.x.x (Retail)
+        // China region: No WoW version filtering (only filters by China in name)
+        private RadioButton classicEraVersionRadio = null!;  // 1.x.x (Classic Era) - for Regular
+        private RadioButton tbcVersionRadio = null!;        // 2.x.x (TBC Classic) - for Regular
+        private RadioButton mopVersionRadio = null!;         // 5.x.x (MoP Classic) - for Regular
+        private RadioButton retailVersionRadio = null!;      // 12.x.x (Retail) - for Regular
+
+        // iMorph type filter
+        private RadioButton regularTypeRadio = null!;   // Base iMorph
+        private RadioButton menuTypeRadio = null!;      // (Menu)
+        private RadioButton netTypeRadio = null!;       // (Net)
         private MegaApiClient? client;
         private List<INode> allFiles; // All files before filtering
         private List<INode> files; // Filtered files
@@ -84,7 +96,7 @@ namespace IMorphMegaDownloader
 
         private void InitializeComponent()
         {
-            this.Text = "iMorph Manager v1.0.0 by Watchlord";
+            this.Text = "iMorph Manager v1.1.0 by Watchlord";
             this.Size = new System.Drawing.Size(900, 650);
             this.StartPosition = FormStartPosition.CenterScreen;
             this.MinimumSize = new System.Drawing.Size(800, 550);
@@ -107,26 +119,26 @@ namespace IMorphMegaDownloader
             Panel filterPanel = new Panel
             {
                 Dock = DockStyle.Top,
-                Height = 70,
+                Height = 100,
                 Padding = new Padding(10, 5, 10, 5)
             };
 
-            // Version Selection Panel (separate group for version radio buttons)
-            Panel versionPanel = new Panel
+            // Region Selection Panel (Regular vs China)
+            Panel regionPanel = new Panel
             {
                 Location = new System.Drawing.Point(0, 0),
-                Size = new System.Drawing.Size(400, 25)
+                Size = new System.Drawing.Size(500, 25)
             };
 
-            Label versionLabel = new Label
+            Label regionLabel = new Label
             {
-                Text = "Version:",
+                Text = "Region:",
                 Location = new System.Drawing.Point(0, 8),
                 AutoSize = true
             };
-            versionPanel.Controls.Add(versionLabel);
+            regionPanel.Controls.Add(regionLabel);
 
-            // Version radio buttons - in their own panel for grouping
+            // Region radio buttons
             regularVersionRadio = new RadioButton
             {
                 Text = "Regular (Non-China)",
@@ -136,7 +148,7 @@ namespace IMorphMegaDownloader
                 TabStop = true
             };
             regularVersionRadio.CheckedChanged += Filter_CheckedChanged;
-            versionPanel.Controls.Add(regularVersionRadio);
+            regionPanel.Controls.Add(regularVersionRadio);
 
             chinaVersionRadio = new RadioButton
             {
@@ -146,14 +158,70 @@ namespace IMorphMegaDownloader
                 TabStop = true
             };
             chinaVersionRadio.CheckedChanged += Filter_CheckedChanged;
-            versionPanel.Controls.Add(chinaVersionRadio);
+            regionPanel.Controls.Add(chinaVersionRadio);
 
-            filterPanel.Controls.Add(versionPanel);
+            filterPanel.Controls.Add(regionPanel);
+
+            // WoW Version Selection Panel (only for Regular region)
+            // Regular region: 1.x.x (Classic Era), 2.x.x (TBC Classic), 5.x.x (MoP Classic), 12.x.x (Retail)
+            // China region: No WoW version filtering
+            Panel wowVersionPanel = new Panel
+            {
+                Location = new System.Drawing.Point(0, 30),
+                Size = new System.Drawing.Size(650, 25)
+            };
+
+            Label wowVersionLabel = new Label
+            {
+                Text = "WoW Version:",
+                Location = new System.Drawing.Point(0, 8),
+                AutoSize = true
+            };
+            wowVersionPanel.Controls.Add(wowVersionLabel);
+
+            classicEraVersionRadio = new RadioButton
+            {
+                Text = "1.x.x (Classic Era)",
+                Location = new System.Drawing.Point(90, 6),
+                AutoSize = true
+            };
+            classicEraVersionRadio.CheckedChanged += Filter_CheckedChanged;
+            wowVersionPanel.Controls.Add(classicEraVersionRadio);
+
+            tbcVersionRadio = new RadioButton
+            {
+                Text = "2.x.x (TBC Classic)",
+                Location = new System.Drawing.Point(220, 6),
+                AutoSize = true
+            };
+            tbcVersionRadio.CheckedChanged += Filter_CheckedChanged;
+            wowVersionPanel.Controls.Add(tbcVersionRadio);
+
+            mopVersionRadio = new RadioButton
+            {
+                Text = "5.x.x (MoP Classic)",
+                Location = new System.Drawing.Point(360, 6),
+                AutoSize = true
+            };
+            mopVersionRadio.CheckedChanged += Filter_CheckedChanged;
+            wowVersionPanel.Controls.Add(mopVersionRadio);
+
+            retailVersionRadio = new RadioButton
+            {
+                Text = "12.x.x (Retail)",
+                Location = new System.Drawing.Point(500, 6),
+                AutoSize = true,
+                Checked = true
+            };
+            retailVersionRadio.CheckedChanged += Filter_CheckedChanged;
+            wowVersionPanel.Controls.Add(retailVersionRadio);
+
+            filterPanel.Controls.Add(wowVersionPanel);
 
             // Type Selection Panel (separate group for type radio buttons)
             Panel typePanel = new Panel
             {
-                Location = new System.Drawing.Point(0, 30),
+                Location = new System.Drawing.Point(0, 60),
                 Size = new System.Drawing.Size(400, 25)
             };
 
@@ -902,6 +970,35 @@ namespace IMorphMegaDownloader
             return !IsMenuType(fileName) && !IsNetType(fileName);
         }
 
+        private int? GetWowMajorVersion(string fileName)
+        {
+            try
+            {
+                int start = fileName.IndexOf('[');
+                int end = fileName.IndexOf(']', start + 1);
+                if (start >= 0 && end > start + 1)
+                {
+                    string inside = fileName.Substring(start + 1, end - start - 1);
+                    var parts = inside.Split('.');
+                    if (parts.Length > 0 && int.TryParse(parts[0], out int major))
+                    {
+                        return major;
+                    }
+                }
+            }
+            catch
+            {
+                // Ignore parsing errors and treat as unknown
+            }
+            return null;
+        }
+
+        private bool IsWowVersionMatch(string fileName, int targetMajor)
+        {
+            var major = GetWowMajorVersion(fileName);
+            return major.HasValue && major.Value == targetMajor;
+        }
+
         private void ApplyFilters()
         {
             if (allFiles == null || allFiles.Count == 0)
@@ -912,11 +1009,10 @@ namespace IMorphMegaDownloader
 
             var filtered = allFiles.AsEnumerable();
 
-            // Apply version filter (China vs Regular) - ensure one is always selected
-            // Default to Regular if somehow neither is checked (shouldn't happen, but safety check)
+            // Apply region filter (China vs Regular) - ensure one is always selected
             bool isChinaSelected = chinaVersionRadio != null && chinaVersionRadio.Checked;
             bool isRegularSelected = regularVersionRadio != null && regularVersionRadio.Checked;
-            
+
             // If neither is selected (shouldn't happen), default to Regular
             if (!isChinaSelected && !isRegularSelected && regularVersionRadio != null)
             {
@@ -926,29 +1022,59 @@ namespace IMorphMegaDownloader
 
             if (isChinaSelected)
             {
-                // Show only China/Chinese versions (type filter will be applied next)
+                // China region: only filter by China in name, ignore WoW version filters
                 filtered = filtered.Where(f => IsChinaVersion(f.Name));
             }
             else
             {
-                // Show only Regular (non-China) versions (type filter will be applied next)
+                // Regular region: exclude China versions
                 filtered = filtered.Where(f => !IsChinaVersion(f.Name));
+
+                // Apply WoW version filter for Regular (1.x.x Classic Era, 2.x.x TBC, 5.x.x MoP, 12.x.x Retail)
+                bool classicEraSelected = classicEraVersionRadio != null && classicEraVersionRadio.Checked;
+                bool tbcSelected = tbcVersionRadio != null && tbcVersionRadio.Checked;
+                bool mopSelected = mopVersionRadio != null && mopVersionRadio.Checked;
+                bool retailSelected = retailVersionRadio != null && retailVersionRadio.Checked;
+
+                // Ensure at least one WoW version is selected, default to Retail
+                if (!classicEraSelected && !tbcSelected && !mopSelected && !retailSelected && retailVersionRadio != null)
+                {
+                    retailVersionRadio.Checked = true;
+                    retailSelected = true;
+                }
+
+                if (classicEraSelected)
+                {
+                    filtered = filtered.Where(f => IsWowVersionMatch(f.Name, 1));
+                }
+                else if (tbcSelected)
+                {
+                    filtered = filtered.Where(f => IsWowVersionMatch(f.Name, 2));
+                }
+                else if (mopSelected)
+                {
+                    filtered = filtered.Where(f => IsWowVersionMatch(f.Name, 5));
+                }
+                else // retailSelected
+                {
+                    filtered = filtered.Where(f => IsWowVersionMatch(f.Name, 12));
+                }
             }
 
-            // Apply type filter (Regular vs Menu vs Net) - works with both China and Regular versions
+            // Apply type filter (Regular vs Menu vs Net)
             if (menuTypeRadio.Checked)
             {
-                // Filter for (Menu) type - works with both China and Regular versions
+                // Filter for (Menu) type
                 filtered = filtered.Where(f => IsMenuType(f.Name));
             }
             else if (netTypeRadio.Checked)
             {
-                // Filter for (Net) type - works with both China and Regular versions
+                // Filter for (Net) type
                 filtered = filtered.Where(f => IsNetType(f.Name));
             }
             else // regularTypeRadio.Checked
             {
-                // Filter for Regular type (no Menu/Net) - works with both China and Regular versions
+                // Filter for Regular type (no Menu/Net)
                 filtered = filtered.Where(f => IsRegularType(f.Name));
             }
 
@@ -971,19 +1097,49 @@ namespace IMorphMegaDownloader
                 }
             }
 
+            // Enable/disable WoW version radios based on region selection
+            bool isChina = chinaVersionRadio != null && chinaVersionRadio.Checked;
+            if (classicEraVersionRadio != null && tbcVersionRadio != null && mopVersionRadio != null && retailVersionRadio != null)
+            {
+                classicEraVersionRadio.Enabled = !isChina;
+                tbcVersionRadio.Enabled = !isChina;
+                mopVersionRadio.Enabled = !isChina;
+                retailVersionRadio.Enabled = !isChina;
+            }
+
             if (allFiles != null && allFiles.Count > 0)
             {
-                // Apply both version and type filters together
-                // Type filter works with both China and Regular versions
+                // Apply all filters together (Region, WoW Version, Type)
                 ApplyFilters();
                 PopulateFileList();
                 
                 // Update file count with filter information for clarity
-                bool isChina = chinaVersionRadio != null && chinaVersionRadio.Checked;
-                string versionFilter = isChina ? "China" : "Regular";
+                string regionFilter = isChina ? "China" : "Regular";
+
+                string wowFilter;
+                if (isChina)
+                {
+                    wowFilter = "N/A (China region)";
+                }
+                else
+                {
+                    // Regular region WoW versions
+                    if (classicEraVersionRadio != null && classicEraVersionRadio.Checked)
+                        wowFilter = "1.x.x (Classic Era)";
+                    else if (tbcVersionRadio != null && tbcVersionRadio.Checked)
+                        wowFilter = "2.x.x (TBC Classic)";
+                    else if (mopVersionRadio != null && mopVersionRadio.Checked)
+                        wowFilter = "5.x.x (MoP Classic)";
+                    else if (retailVersionRadio != null && retailVersionRadio.Checked)
+                        wowFilter = "12.x.x (Retail)";
+                    else
+                        wowFilter = "Unknown";
+                }
+
                 string typeFilter = menuTypeRadio != null && menuTypeRadio.Checked ? "Menu" : 
                                    (netTypeRadio != null && netTypeRadio.Checked ? "Net" : "Regular");
-                fileCountLabel.Text = $"Files: {files.Count} ({versionFilter} - {typeFilter})";
+
+                fileCountLabel.Text = $"Files: {files.Count} ({regionFilter} - {wowFilter} - {typeFilter})";
                 
                 if (files.Count > 0)
                 {
@@ -995,7 +1151,7 @@ namespace IMorphMegaDownloader
                 }
                 else
                 {
-                    latestFileInfo.Text = $"No files match the selected filters.\nVersion: {versionFilter}\nType: {typeFilter}";
+                    latestFileInfo.Text = $"No files match the selected filters.\nRegion: {regionFilter}\nWoW Version: {wowFilter}\nType: {typeFilter}";
                     if (downloadButton != null)
                     {
                         downloadButton.Enabled = false;
@@ -1198,43 +1354,30 @@ namespace IMorphMegaDownloader
         {
             try
             {
-                string logoPath = Path.Combine(Application.StartupPath, "iMorph Logo.png");
-                System.Drawing.Bitmap? bitmap = null;
+                string logoPath = Path.Combine(Application.StartupPath, "iMorph Logo.ico");
+                System.Drawing.Icon? icon = null;
                 
                 if (File.Exists(logoPath))
                 {
-                    bitmap = new System.Drawing.Bitmap(logoPath);
+                    icon = new System.Drawing.Icon(logoPath);
                 }
                 else
                 {
                     // Try loading from embedded resources
                     var assembly = System.Reflection.Assembly.GetExecutingAssembly();
-                    var resourceName = "IMorphMegaDownloader.iMorph Logo.png";
+                    var resourceName = "IMorphMegaDownloader.iMorph Logo.ico";
                     using (var stream = assembly.GetManifestResourceStream(resourceName))
                     {
                         if (stream != null)
                         {
-                            bitmap = new System.Drawing.Bitmap(stream);
+                            icon = new System.Drawing.Icon(stream);
                         }
                     }
                 }
                 
-                if (bitmap != null)
+                if (icon != null)
                 {
-                    // Convert PNG to Icon - create a proper icon from the bitmap
-                    using (bitmap)
-                    {
-                        // Create icon from bitmap - use a standard icon size (32x32 is common)
-                        int iconSize = 32;
-                        using (var resized = new System.Drawing.Bitmap(bitmap, new System.Drawing.Size(iconSize, iconSize)))
-                        {
-                            IntPtr hIcon = resized.GetHicon();
-                            var tempIcon = System.Drawing.Icon.FromHandle(hIcon);
-                            // Clone the icon so we own it independently
-                            this.Icon = (System.Drawing.Icon)tempIcon.Clone();
-                            tempIcon.Dispose();
-                        }
-                    }
+                    this.Icon = icon;
                 }
             }
             catch (Exception ex)

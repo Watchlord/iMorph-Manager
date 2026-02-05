@@ -16,4 +16,4 @@ C:\Users\WPC\Documents\imorph c#\obj\Release\net8.0-windows\IMorphManager.dll
 C:\Users\WPC\Documents\imorph c#\obj\Release\net8.0-windows\refint\IMorphManager.dll
 C:\Users\WPC\Documents\imorph c#\obj\Release\net8.0-windows\IMorphManager.pdb
 C:\Users\WPC\Documents\imorph c#\obj\Release\net8.0-windows\ref\IMorphManager.dll
-C:\Users\WPC\Documents\imorph c#\bin\Release\net8.0-windows\iMorph Logo.png
+C:\Users\WPC\Documents\imorph c#\bin\Release\net8.0-windows\iMorph Logo.ico

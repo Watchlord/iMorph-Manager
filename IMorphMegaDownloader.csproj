@@ -8,14 +8,15 @@
     <Nullable>enable</Nullable>
     <OutputPath>bin\$(Configuration)\</OutputPath>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>iMorph Logo.ico</ApplicationIcon>
     <AssemblyName>IMorphManager</AssemblyName>
     <RootNamespace>IMorphMegaDownloader</RootNamespace>
     <Company>Watchlord</Company>
-    <Product>iMorph Manager v1.0.0 by Watchlord</Product>
+    <Product>iMorph Manager v1.1.0 by Watchlord</Product>
     <Copyright>Copyright © Watchlord</Copyright>
-    <Version>1.0.0</Version>
-    <AssemblyVersion>1.0.0.0</AssemblyVersion>
-    <FileVersion>1.0.0.0</FileVersion>
+    <Version>1.1.0</Version>
+    <AssemblyVersion>1.1.0.0</AssemblyVersion>
+    <FileVersion>1.1.0.0</FileVersion>
   </PropertyGroup>
 
   <ItemGroup>
@@ -23,13 +24,13 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Include="iMorph Logo.png">
+    <None Include="iMorph Logo.ico">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>
 
   <ItemGroup>
-    <EmbeddedResource Include="iMorph Logo.png" />
+    <EmbeddedResource Include="iMorph Logo.ico" />
   </ItemGroup>
 
 </Project>
