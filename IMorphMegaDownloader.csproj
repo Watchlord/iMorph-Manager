@@ -12,11 +12,11 @@
     <AssemblyName>IMorphManager</AssemblyName>
     <RootNamespace>IMorphMegaDownloader</RootNamespace>
     <Company>Watchlord</Company>
-    <Product>iMorph Manager v1.2.0 by Watchlord</Product>
+    <Product>iMorph Manager v1.2.1 by Watchlord</Product>
     <Copyright>Copyright © Watchlord</Copyright>
-    <Version>1.2.0</Version>
-    <AssemblyVersion>1.2.0.0</AssemblyVersion>
-    <FileVersion>1.2.0.0</FileVersion>
+    <Version>1.2.1</Version>
+    <AssemblyVersion>1.2.1.0</AssemblyVersion>
+    <FileVersion>1.2.1.0</FileVersion>
   </PropertyGroup>
 
   <ItemGroup>

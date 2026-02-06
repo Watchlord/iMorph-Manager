@@ -29,7 +29,9 @@ using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
+using System.Net.Http;
 using System.Text;
+using System.Text.Json;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 
@@ -47,6 +49,7 @@ namespace IMorphMegaDownloader
         private Button downloadButton = null!;
         private Button launchIMorphButton = null!;
         private Button deleteIMorphFoldersButton = null!;
+        private Button checkUpdateButton = null!;
         private Label statusLabel = null!;
         private Label fileCountLabel = null!;
         private ProgressBar progressBar = null!;
@@ -96,13 +99,29 @@ namespace IMorphMegaDownloader
 
         private void InitializeComponent()
         {
-            this.Text = "iMorph Manager v1.2.0 by Watchlord";
-            this.Size = new System.Drawing.Size(900, 650);
+            this.Text = "iMorph Manager v1.2.1 by Watchlord";
+            this.Size = new System.Drawing.Size(920, 650);
             this.StartPosition = FormStartPosition.CenterScreen;
-            this.MinimumSize = new System.Drawing.Size(800, 550);
+            this.MinimumSize = new System.Drawing.Size(920, 550);
             
             // Set application icon from PNG logo
             SetApplicationIcon();
+
+            // Menu Strip with Help menu - must be added first to appear at top
+            MenuStrip mainMenu = new MenuStrip
+            {
+                Dock = DockStyle.Top,
+                AutoSize = true,
+                Stretch = true
+            };
+            ToolStripMenuItem helpMenu = new ToolStripMenuItem("Help");
+            ToolStripMenuItem checkUpdateMenuItem = new ToolStripMenuItem("Check for Updates");
+            checkUpdateMenuItem.Click += CheckUpdateButton_Click;
+            helpMenu.DropDownItems.Add(checkUpdateMenuItem);
+            mainMenu.Items.Add(helpMenu);
+            this.MainMenuStrip = mainMenu;
+            this.Controls.Add(mainMenu);
+            mainMenu.BringToFront();
 
             // Status Label
             statusLabel = new Label
@@ -422,6 +441,17 @@ namespace IMorphMegaDownloader
             };
             launchIMorphButton.Click += LaunchIMorphButton_Click;
             buttonPanel.Controls.Add(launchIMorphButton);
+
+            checkUpdateButton = new Button
+            {
+                Text = "Check for Updates",
+                Size = new System.Drawing.Size(140, 35),
+                Location = new System.Drawing.Point(750, 8),
+                Anchor = AnchorStyles.Right | AnchorStyles.Bottom,
+                Visible = true
+            };
+            checkUpdateButton.Click += CheckUpdateButton_Click;
+            buttonPanel.Controls.Add(checkUpdateButton);
 
             this.Controls.Add(buttonPanel);
 
@@ -1761,6 +1791,249 @@ namespace IMorphMegaDownloader
                 }
                 
                 return null; // User cancelled
+            }
+        }
+
+        private async void CheckUpdateButton_Click(object? sender, EventArgs e)
+        {
+            try
+            {
+                checkUpdateButton.Enabled = false;
+                statusLabel.Text = "Checking for updates...";
+                progressBar.Visible = true;
+                progressBar.Style = ProgressBarStyle.Marquee;
+
+                // Get current version from assembly
+                string currentVersion = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "1.2.1";
+                // Remove build and revision numbers if present (e.g., "1.2.0.0" -> "1.2.0")
+                if (currentVersion.Split('.').Length > 3)
+                {
+                    var parts = currentVersion.Split('.');
+                    currentVersion = $"{parts[0]}.{parts[1]}.{parts[2]}";
+                }
+                Version currentVer = new Version(currentVersion);
+
+                // Check GitHub releases
+                string latestVersion = await GetLatestVersionFromGitHub();
+                
+                if (string.IsNullOrEmpty(latestVersion))
+                {
+                    statusLabel.Text = "Unable to check for updates. Please try again later.";
+                    MessageBox.Show("Unable to check for updates. Please check your internet connection and try again.",
+                        "Update Check Failed",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Warning);
+                    return;
+                }
+
+                Version latestVer = new Version(latestVersion);
+
+                if (latestVer <= currentVer)
+                {
+                    statusLabel.Text = "You have the latest version installed.";
+                    MessageBox.Show("Latest version already installed!",
+                        "Up to Date",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Information);
+                    return;
+                }
+
+                // New version available - ask user if they want to update
+                var updateResult = MessageBox.Show(
+                    $"A new version is available!\n\nCurrent version: {currentVersion}\nLatest version: {latestVersion}\n\nWould you like to download and install the update?",
+                    "Update Available",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Question);
+
+                if (updateResult != DialogResult.Yes)
+                {
+                    statusLabel.Text = "Update cancelled.";
+                    return;
+                }
+
+                // Download and install update
+                await DownloadAndInstallUpdate(latestVersion);
+            }
+            catch (Exception ex)
+            {
+                statusLabel.Text = $"Update check error: {ex.Message}";
+                MessageBox.Show($"Error checking for updates:\n\n{ex.Message}",
+                    "Update Error",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
+            }
+            finally
+            {
+                checkUpdateButton.Enabled = true;
+                progressBar.Visible = false;
+            }
+        }
+
+        private async Task<string> GetLatestVersionFromGitHub()
+        {
+            try
+            {
+                using (HttpClient client = new HttpClient())
+                {
+                    client.DefaultRequestHeaders.Add("User-Agent", "iMorph-Manager");
+                    string apiUrl = "https://api.github.com/repos/Watchlord/iMorph-Manager/releases/latest";
+                    
+                    string response = await client.GetStringAsync(apiUrl);
+                    
+                    // Parse JSON response
+                    using (JsonDocument doc = JsonDocument.Parse(response))
+                    {
+                        JsonElement root = doc.RootElement;
+                        string tagName = root.GetProperty("tag_name").GetString() ?? "";
+                        
+                        // Remove 'v' prefix if present
+                        if (tagName.StartsWith("v", StringComparison.OrdinalIgnoreCase))
+                        {
+                            tagName = tagName.Substring(1);
+                        }
+                        
+                        return tagName;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error getting latest version: {ex.Message}");
+                return string.Empty;
+            }
+        }
+
+        private async Task<string> GetLatestReleaseDownloadUrl()
+        {
+            try
+            {
+                using (HttpClient client = new HttpClient())
+                {
+                    client.DefaultRequestHeaders.Add("User-Agent", "iMorph-Manager");
+                    string apiUrl = "https://api.github.com/repos/Watchlord/iMorph-Manager/releases/latest";
+                    
+                    string response = await client.GetStringAsync(apiUrl);
+                    
+                    // Parse JSON response to get download URL
+                    using (JsonDocument doc = JsonDocument.Parse(response))
+                    {
+                        JsonElement root = doc.RootElement;
+                        JsonElement assets = root.GetProperty("assets");
+                        
+                        foreach (JsonElement asset in assets.EnumerateArray())
+                        {
+                            string name = asset.GetProperty("name").GetString() ?? "";
+                            if (name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+                            {
+                                return asset.GetProperty("browser_download_url").GetString() ?? "";
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error getting download URL: {ex.Message}");
+                return string.Empty;
+            }
+            
+            return string.Empty;
+        }
+
+        private async Task DownloadAndInstallUpdate(string version)
+        {
+            try
+            {
+                statusLabel.Text = "Downloading update...";
+                progressBar.Visible = true;
+                progressBar.Style = ProgressBarStyle.Marquee;
+
+                // Get download URL
+                string downloadUrl = await GetLatestReleaseDownloadUrl();
+                if (string.IsNullOrEmpty(downloadUrl))
+                {
+                    MessageBox.Show("Unable to get download URL. Please try again later.",
+                        "Update Error",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Error);
+                    return;
+                }
+
+                // Get application directory
+                string appDirectory = Path.GetDirectoryName(Application.ExecutablePath) ?? Application.StartupPath;
+                string tempZipPath = Path.Combine(Path.GetTempPath(), $"iMorphManager_Update_{version}.zip");
+                string tempExtractPath = Path.Combine(Path.GetTempPath(), $"iMorphManager_Update_{version}_Extract");
+
+                // Download the update
+                using (HttpClient client = new HttpClient())
+                {
+                    client.DefaultRequestHeaders.Add("User-Agent", "iMorph-Manager");
+                    byte[] fileData = await client.GetByteArrayAsync(downloadUrl);
+                    await File.WriteAllBytesAsync(tempZipPath, fileData);
+                }
+
+                statusLabel.Text = "Extracting update...";
+
+                // Extract to temp directory
+                if (Directory.Exists(tempExtractPath))
+                {
+                    Directory.Delete(tempExtractPath, true);
+                }
+                Directory.CreateDirectory(tempExtractPath);
+                ZipFile.ExtractToDirectory(tempZipPath, tempExtractPath, overwriteFiles: true);
+
+                statusLabel.Text = "Installing update...";
+
+                // Close the application gracefully
+                // We'll use a batch file to handle the replacement and restart
+                string batchFile = Path.Combine(Path.GetTempPath(), "iMorphManager_Update.bat");
+                string exeName = Path.GetFileName(Application.ExecutablePath);
+                string exePath = Application.ExecutablePath;
+
+                // Create batch script to replace files and restart
+                StringBuilder batchScript = new StringBuilder();
+                batchScript.AppendLine("@echo off");
+                batchScript.AppendLine("timeout /t 2 /nobreak >nul");
+                batchScript.AppendLine($"taskkill /F /IM \"{exeName}\" >nul 2>&1");
+                batchScript.AppendLine("timeout /t 1 /nobreak >nul");
+                
+                // Copy all files from temp extract to app directory
+                batchScript.AppendLine($"xcopy /E /Y /I \"{tempExtractPath}\\*\" \"{appDirectory}\"");
+                
+                // Clean up temp files
+                batchScript.AppendLine($"del /F /Q \"{tempZipPath}\"");
+                batchScript.AppendLine($"rmdir /S /Q \"{tempExtractPath}\"");
+                batchScript.AppendLine($"del /F /Q \"%~f0\"");
+                
+                // Restart the application
+                batchScript.AppendLine($"start \"\" \"{exePath}\"");
+                
+                File.WriteAllText(batchFile, batchScript.ToString());
+
+                // Show completion message
+                MessageBox.Show("iMorph Manager update complete!",
+                    "Update Complete",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+
+                // Start the batch file and close the application
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = batchFile,
+                    UseShellExecute = true,
+                    CreateNoWindow = true,
+                    WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden
+                });
+
+                Application.Exit();
+            }
+            catch (Exception ex)
+            {
+                statusLabel.Text = $"Update error: {ex.Message}";
+                MessageBox.Show($"Error installing update:\n\n{ex.Message}",
+                    "Update Error",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
             }
         }
 
