@@ -10,3 +10,5 @@ Anyways I feel free to comment on any issues, this is my first time creating a p
 v1.0.0 - First Version released to the public
 
 v1.1.0 - Added Retail, TBC, Classic Era and MoP options for users to choose which version of iMorph they want - replaced the .png to .ico to allow for the .exe to have the iMorph logo
+
+v1.2.0 - The launcher creates multiple files based on expansion to prevent the application from selecting the wrong iMorph version when the user selects Launch iMorph. Launch iMorph button now also allows the user to select which version of iMorph they want to start up (e.g if the user wants to select TBC iMorph or Retail iMorph). The user can now delete their choice iMorph expansion version (again TBC, Retail, e.g) or delete all files if they choose to do so.
