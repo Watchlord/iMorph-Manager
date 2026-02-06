@@ -96,7 +96,7 @@ namespace IMorphMegaDownloader
 
         private void InitializeComponent()
         {
-            this.Text = "iMorph Manager v1.1.0 by Watchlord";
+            this.Text = "iMorph Manager v1.2.0 by Watchlord";
             this.Size = new System.Drawing.Size(900, 650);
             this.StartPosition = FormStartPosition.CenterScreen;
             this.MinimumSize = new System.Drawing.Size(800, 550);
@@ -576,6 +576,38 @@ namespace IMorphMegaDownloader
             }
         }
 
+        private string GetWowVersionFolderName()
+        {
+            // Check if China region is selected
+            bool isChina = chinaVersionRadio != null && chinaVersionRadio.Checked;
+            
+            if (isChina)
+            {
+                return "China iMorph";
+            }
+            
+            // Regular region - get WoW version folder name
+            if (classicEraVersionRadio != null && classicEraVersionRadio.Checked)
+            {
+                return "Classic Era iMorph";
+            }
+            else if (tbcVersionRadio != null && tbcVersionRadio.Checked)
+            {
+                return "TBC Classic iMorph";
+            }
+            else if (mopVersionRadio != null && mopVersionRadio.Checked)
+            {
+                return "MoP Classic iMorph";
+            }
+            else if (retailVersionRadio != null && retailVersionRadio.Checked)
+            {
+                return "Retail iMorph";
+            }
+            
+            // Default to Retail if somehow none is selected
+            return "Retail iMorph";
+        }
+
         private async Task DownloadFile(INode file)
         {
             try
@@ -585,7 +617,17 @@ namespace IMorphMegaDownloader
                     Directory.CreateDirectory(downloadDirectory);
                 }
 
-                string destinationPath = Path.Combine(downloadDirectory, file.Name);
+                // Get the WoW version-specific folder name
+                string versionFolderName = GetWowVersionFolderName();
+                string versionDirectory = Path.Combine(downloadDirectory, versionFolderName);
+                
+                // Create version-specific directory if it doesn't exist
+                if (!Directory.Exists(versionDirectory))
+                {
+                    Directory.CreateDirectory(versionDirectory);
+                }
+
+                string destinationPath = Path.Combine(versionDirectory, file.Name);
 
                 if (File.Exists(destinationPath))
                 {
@@ -628,7 +670,8 @@ namespace IMorphMegaDownloader
                     {
                         await Task.Run(() =>
                         {
-                            ExtractZipFile(destinationPath, downloadDirectory);
+                            // Extract to the version-specific directory (reuse variables from outer scope)
+                            ExtractZipFile(destinationPath, versionDirectory);
                         });
                         
                         statusLabel.Text = $"Extraction completed: {file.Name}";
@@ -657,7 +700,8 @@ namespace IMorphMegaDownloader
 
                 if (openResult == DialogResult.Yes)
                 {
-                    System.Diagnostics.Process.Start("explorer.exe", Path.GetFullPath(downloadDirectory));
+                    // Open the version-specific folder (reuse variables from outer scope)
+                    System.Diagnostics.Process.Start("explorer.exe", Path.GetFullPath(versionDirectory));
                 }
             }
             catch (Exception ex)
@@ -763,10 +807,47 @@ namespace IMorphMegaDownloader
                     return;
                 }
 
-                // Search in subdirectories
-                var directories = Directory.GetDirectories(downloadDirectory, "*", SearchOption.AllDirectories);
-                foreach (var dir in directories)
+                // Check in version-specific folders first (most likely location)
+                string[] versionFolders = { "Classic Era iMorph", "TBC Classic iMorph", "MoP Classic iMorph", "Retail iMorph", "China iMorph" };
+                foreach (string versionFolder in versionFolders)
                 {
+                    string versionDir = Path.Combine(downloadDirectory, versionFolder);
+                    if (Directory.Exists(versionDir))
+                    {
+                        // Search in this version folder and its subdirectories
+                        var directories = Directory.GetDirectories(versionDir, "*", SearchOption.AllDirectories);
+                        foreach (var dir in directories)
+                        {
+                            string exePath = Path.Combine(dir, "RuniMorph.exe");
+                            if (File.Exists(exePath))
+                            {
+                                runiMorphExePath = exePath;
+                                UpdateLaunchButtonVisibility();
+                                return;
+                            }
+                        }
+                        // Also check directly in the version folder
+                        string versionExePath = Path.Combine(versionDir, "RuniMorph.exe");
+                        if (File.Exists(versionExePath))
+                        {
+                            runiMorphExePath = versionExePath;
+                            UpdateLaunchButtonVisibility();
+                            return;
+                        }
+                    }
+                }
+
+                // Search in all other subdirectories (for backwards compatibility)
+                var otherDirectories = Directory.GetDirectories(downloadDirectory, "*", SearchOption.AllDirectories);
+                foreach (var dir in otherDirectories)
+                {
+                    // Skip version-specific folders (already checked)
+                    string dirName = Path.GetFileName(dir);
+                    if (versionFolders.Contains(dirName))
+                    {
+                        continue;
+                    }
+                    
                     string exePath = Path.Combine(dir, "RuniMorph.exe");
                     if (File.Exists(exePath))
                     {
@@ -784,11 +865,84 @@ namespace IMorphMegaDownloader
             UpdateLaunchButtonVisibility();
         }
 
+        private Dictionary<string, string> FindInstalledIMorphVersions()
+        {
+            var installedVersions = new Dictionary<string, string>();
+            
+            if (!Directory.Exists(downloadDirectory))
+            {
+                return installedVersions;
+            }
+
+            // Map version folder names to display names
+            var versionMap = new Dictionary<string, string>
+            {
+                { "Classic Era iMorph", "Classic Era (1.x.x)" },
+                { "TBC Classic iMorph", "TBC Classic (2.x.x)" },
+                { "MoP Classic iMorph", "MoP Classic (5.x.x)" },
+                { "Retail iMorph", "Retail (12.x.x)" },
+                { "China iMorph", "China" }
+            };
+
+            string[] versionFolders = { "Classic Era iMorph", "TBC Classic iMorph", "MoP Classic iMorph", "Retail iMorph", "China iMorph" };
+            
+            foreach (string versionFolder in versionFolders)
+            {
+                string versionDir = Path.Combine(downloadDirectory, versionFolder);
+                if (Directory.Exists(versionDir))
+                {
+                    // Check directly in the version folder
+                    string versionExePath = Path.Combine(versionDir, "RuniMorph.exe");
+                    if (File.Exists(versionExePath))
+                    {
+                        if (versionMap.TryGetValue(versionFolder, out string? displayName))
+                        {
+                            installedVersions[displayName] = versionExePath;
+                        }
+                        continue;
+                    }
+                    
+                    // Search in subdirectories
+                    try
+                    {
+                        var directories = Directory.GetDirectories(versionDir, "*", SearchOption.AllDirectories);
+                        foreach (var dir in directories)
+                        {
+                            string exePath = Path.Combine(dir, "RuniMorph.exe");
+                            if (File.Exists(exePath))
+                            {
+                                if (versionMap.TryGetValue(versionFolder, out string? displayName))
+                                {
+                                    installedVersions[displayName] = exePath;
+                                }
+                                break; // Found one in this version folder, move to next
+                            }
+                        }
+                    }
+                    catch
+                    {
+                        // Ignore errors searching subdirectories
+                    }
+                }
+            }
+            
+            // Also check root directory for backwards compatibility
+            string rootPath = Path.Combine(downloadDirectory, "RuniMorph.exe");
+            if (File.Exists(rootPath))
+            {
+                installedVersions["Root Directory"] = rootPath;
+            }
+
+            return installedVersions;
+        }
+
         private void UpdateLaunchButtonVisibility()
         {
             if (launchIMorphButton != null)
             {
-                bool shouldShow = !string.IsNullOrEmpty(runiMorphExePath) && File.Exists(runiMorphExePath);
+                // Show button if any version is installed
+                var installedVersions = FindInstalledIMorphVersions();
+                bool shouldShow = installedVersions.Count > 0;
                 launchIMorphButton.Visible = shouldShow;
                 launchIMorphButton.Enabled = shouldShow;
             }
@@ -796,9 +950,11 @@ namespace IMorphMegaDownloader
 
         private void LaunchIMorphButton_Click(object? sender, EventArgs e)
         {
-            if (string.IsNullOrEmpty(runiMorphExePath) || !File.Exists(runiMorphExePath))
+            var installedVersions = FindInstalledIMorphVersions();
+            
+            if (installedVersions.Count == 0)
             {
-                MessageBox.Show("RuniMorph.exe not found. Please download and extract an iMorph zip file first.",
+                MessageBox.Show("No iMorph installations found. Please download and extract an iMorph zip file first.",
                     "iMorph Not Found",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Warning);
@@ -806,25 +962,101 @@ namespace IMorphMegaDownloader
                 return;
             }
 
+            // If only one version is installed, launch it directly
+            if (installedVersions.Count == 1)
+            {
+                var version = installedVersions.First();
+                LaunchIMorphVersion(version.Value, version.Key);
+                return;
+            }
+
+            // Show selection dialog for multiple versions
+            using (Form selectionForm = new Form())
+            {
+                selectionForm.Text = "Select iMorph Version to Launch";
+                selectionForm.Size = new System.Drawing.Size(350, 200);
+                selectionForm.StartPosition = FormStartPosition.CenterParent;
+                selectionForm.FormBorderStyle = FormBorderStyle.FixedDialog;
+                selectionForm.MaximizeBox = false;
+                selectionForm.MinimizeBox = false;
+                selectionForm.ShowInTaskbar = false;
+
+                Label label = new Label
+                {
+                    Text = "Select which version of iMorph you want to launch:",
+                    Location = new System.Drawing.Point(10, 10),
+                    Size = new System.Drawing.Size(320, 20),
+                    AutoSize = false
+                };
+                selectionForm.Controls.Add(label);
+
+                ListBox versionListBox = new ListBox
+                {
+                    Location = new System.Drawing.Point(10, 35),
+                    Size = new System.Drawing.Size(320, 100),
+                    SelectionMode = SelectionMode.One
+                };
+                
+                foreach (var version in installedVersions.Keys)
+                {
+                    versionListBox.Items.Add(version);
+                }
+                
+                versionListBox.SelectedIndex = 0;
+                selectionForm.Controls.Add(versionListBox);
+
+                Button okButton = new Button
+                {
+                    Text = "Launch",
+                    DialogResult = DialogResult.OK,
+                    Location = new System.Drawing.Point(175, 145),
+                    Size = new System.Drawing.Size(75, 25)
+                };
+                selectionForm.Controls.Add(okButton);
+                selectionForm.AcceptButton = okButton;
+
+                Button cancelButton = new Button
+                {
+                    Text = "Cancel",
+                    DialogResult = DialogResult.Cancel,
+                    Location = new System.Drawing.Point(255, 145),
+                    Size = new System.Drawing.Size(75, 25)
+                };
+                selectionForm.Controls.Add(cancelButton);
+                selectionForm.CancelButton = cancelButton;
+
+                if (selectionForm.ShowDialog(this) == DialogResult.OK && versionListBox.SelectedItem != null)
+                {
+                    string selectedVersion = versionListBox.SelectedItem.ToString()!;
+                    if (installedVersions.TryGetValue(selectedVersion, out string? exePath))
+                    {
+                        LaunchIMorphVersion(exePath, selectedVersion);
+                    }
+                }
+            }
+        }
+
+        private void LaunchIMorphVersion(string exePath, string versionName)
+        {
             try
             {
                 var processInfo = new System.Diagnostics.ProcessStartInfo
                 {
-                    FileName = runiMorphExePath,
-                    WorkingDirectory = Path.GetDirectoryName(runiMorphExePath),
+                    FileName = exePath,
+                    WorkingDirectory = Path.GetDirectoryName(exePath),
                     UseShellExecute = true
                 };
 
                 System.Diagnostics.Process.Start(processInfo);
-                statusLabel.Text = "iMorph launched successfully.";
+                statusLabel.Text = $"iMorph ({versionName}) launched successfully.";
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Error launching iMorph:\n\n{ex.Message}",
+                MessageBox.Show($"Error launching iMorph ({versionName}):\n\n{ex.Message}",
                     "Launch Error",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Error);
-                statusLabel.Text = $"Error launching iMorph: {ex.Message}";
+                statusLabel.Text = $"Error launching iMorph ({versionName}): {ex.Message}";
             }
         }
 
@@ -1186,50 +1418,113 @@ namespace IMorphMegaDownloader
 
             try
             {
-                // Find all iMorph-related folders and zip files
+                // Map version folder names to display names
+                var versionMap = new Dictionary<string, string>
+                {
+                    { "Classic Era iMorph", "Classic Era (1.x.x)" },
+                    { "TBC Classic iMorph", "TBC Classic (2.x.x)" },
+                    { "MoP Classic iMorph", "MoP Classic (5.x.x)" },
+                    { "Retail iMorph", "Retail (12.x.x)" },
+                    { "China iMorph", "China" }
+                };
+
+                string[] versionFolders = { "Classic Era iMorph", "TBC Classic iMorph", "MoP Classic iMorph", "Retail iMorph", "China iMorph" };
+                
+                // Find which version folders exist
+                var availableVersions = new List<string>();
+                foreach (string versionFolder in versionFolders)
+                {
+                    string versionDir = Path.Combine(downloadDirectory, versionFolder);
+                    if (Directory.Exists(versionDir))
+                    {
+                        // Check if folder has any content (folders or zip files)
+                        bool hasContent = false;
+                        try
+                        {
+                            var subDirs = Directory.GetDirectories(versionDir);
+                            var zipFiles = Directory.GetFiles(versionDir, "*.zip", SearchOption.TopDirectoryOnly);
+                            hasContent = subDirs.Length > 0 || zipFiles.Length > 0;
+                        }
+                        catch { }
+                        
+                        if (hasContent)
+                        {
+                            availableVersions.Add(versionFolder);
+                        }
+                    }
+                }
+
+                if (availableVersions.Count == 0)
+                {
+                    MessageBox.Show("No iMorph folders or zip files found in the selected directory.",
+                        "No Items Found",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Information);
+                    return;
+                }
+
+                // Show selection dialog
+                List<string>? selectedVersions = ShowVersionSelectionDialog(availableVersions, versionMap);
+                
+                if (selectedVersions == null || selectedVersions.Count == 0)
+                {
+                    return; // User cancelled
+                }
+
+                bool deleteAll = selectedVersions.Contains("ALL");
+                
+                // Collect items to delete from selected versions
                 var iMorphFolders = new List<string>();
                 var iMorphZipFiles = new List<string>();
                 
-                if (Directory.Exists(downloadDirectory))
+                if (deleteAll)
                 {
-                    // Find folders
-                    var directories = Directory.GetDirectories(downloadDirectory);
-                    foreach (var dir in directories)
-                    {
-                        string dirName = Path.GetFileName(dir).ToLowerInvariant();
-                        // Check if folder name contains "imorph" (case-insensitive)
-                        if (dirName.Contains("imorph"))
-                        {
-                            iMorphFolders.Add(dir);
-                        }
-                    }
+                    // Delete from all available versions
+                    selectedVersions = availableVersions.ToList();
+                }
 
-                    // Find zip files - search for all .zip files and check if they contain "imorph"
-                    try
+                foreach (string versionFolder in selectedVersions)
+                {
+                    string versionDir = Path.Combine(downloadDirectory, versionFolder);
+                    if (Directory.Exists(versionDir))
                     {
-                        var zipFiles = Directory.GetFiles(downloadDirectory, "*.zip", SearchOption.TopDirectoryOnly);
-                        foreach (var zipFile in zipFiles)
+                        // Find folders in this version directory
+                        try
                         {
-                            string fileName = Path.GetFileName(zipFile);
-                            string fileNameLower = fileName.ToLowerInvariant();
-                            // Check if zip file name contains "imorph" (case-insensitive)
-                            // This will match: iMorph, IMORPH, imorph, etc.
-                            if (fileNameLower.Contains("imorph"))
+                            var subDirs = Directory.GetDirectories(versionDir);
+                            foreach (var dir in subDirs)
                             {
-                                iMorphZipFiles.Add(zipFile);
+                                string dirName = Path.GetFileName(dir).ToLowerInvariant();
+                                if (dirName.Contains("imorph"))
+                                {
+                                    iMorphFolders.Add(dir);
+                                }
                             }
                         }
-                    }
-                    catch (Exception ex)
-                    {
-                        System.Diagnostics.Debug.WriteLine($"Error searching for zip files: {ex.Message}");
+                        catch { }
+
+                        // Find zip files in this version directory
+                        try
+                        {
+                            var zipFiles = Directory.GetFiles(versionDir, "*.zip", SearchOption.TopDirectoryOnly);
+                            foreach (var zipFile in zipFiles)
+                            {
+                                string fileName = Path.GetFileName(zipFile);
+                                string fileNameLower = fileName.ToLowerInvariant();
+                                if (fileNameLower.Contains("imorph"))
+                                {
+                                    iMorphZipFiles.Add(zipFile);
+                                }
+                            }
+                        }
+                        catch { }
                     }
                 }
 
                 int totalItems = iMorphFolders.Count + iMorphZipFiles.Count;
                 if (totalItems == 0)
                 {
-                    MessageBox.Show("No iMorph folders or zip files found in the selected directory.",
+                    MessageBox.Show("No iMorph folders or zip files found in the selected version(s).",
                         "No Items Found",
                         MessageBoxButtons.OK,
                         MessageBoxIcon.Information);
@@ -1250,8 +1545,9 @@ namespace IMorphMegaDownloader
                 }
 
                 string itemsListText = string.Join("\n", itemsList);
+                string selectedVersionsText = deleteAll ? "All versions" : string.Join(", ", selectedVersions.Select(v => versionMap.GetValueOrDefault(v, v)));
                 var result = MessageBox.Show(
-                    $"This will delete {totalItems} iMorph item(s):\n\n{itemsListText}\n\n" +
+                    $"This will delete {totalItems} iMorph item(s) from:\n{selectedVersionsText}\n\n{itemsListText}\n\n" +
                     "This action cannot be undone. Continue?",
                     "Delete iMorph Folders and Zip Files",
                     MessageBoxButtons.YesNo,
@@ -1347,6 +1643,124 @@ namespace IMorphMegaDownloader
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Error);
                 statusLabel.Text = $"Error: {ex.Message}";
+            }
+        }
+
+        private List<string>? ShowVersionSelectionDialog(List<string> availableVersions, Dictionary<string, string> versionMap)
+        {
+            using (Form selectionForm = new Form())
+            {
+                selectionForm.Text = "Select iMorph Versions to Delete";
+                selectionForm.Size = new System.Drawing.Size(400, 300);
+                selectionForm.StartPosition = FormStartPosition.CenterParent;
+                selectionForm.FormBorderStyle = FormBorderStyle.FixedDialog;
+                selectionForm.MaximizeBox = false;
+                selectionForm.MinimizeBox = false;
+                selectionForm.ShowInTaskbar = false;
+
+                Label label = new Label
+                {
+                    Text = "Select which version(s) of iMorph you want to delete:",
+                    Location = new System.Drawing.Point(10, 10),
+                    Size = new System.Drawing.Size(370, 20),
+                    AutoSize = false
+                };
+                selectionForm.Controls.Add(label);
+
+                CheckedListBox versionListBox = new CheckedListBox
+                {
+                    Location = new System.Drawing.Point(10, 35),
+                    Size = new System.Drawing.Size(370, 180),
+                    CheckOnClick = true
+                };
+                
+                // Add "Delete All" option first
+                versionListBox.Items.Add("Delete All", false);
+                
+                // Add available versions
+                foreach (string versionFolder in availableVersions)
+                {
+                    string displayName = versionMap.GetValueOrDefault(versionFolder, versionFolder);
+                    versionListBox.Items.Add(displayName, false);
+                }
+                
+                selectionForm.Controls.Add(versionListBox);
+
+                // Handle "Delete All" checkbox logic
+                versionListBox.ItemCheck += (s, e) =>
+                {
+                    if (e.Index == 0) // "Delete All" is first item
+                    {
+                        if (e.NewValue == CheckState.Checked)
+                        {
+                            // Uncheck all other items
+                            for (int i = 1; i < versionListBox.Items.Count; i++)
+                            {
+                                versionListBox.SetItemChecked(i, false);
+                            }
+                        }
+                    }
+                    else
+                    {
+                        // If any individual version is checked, uncheck "Delete All"
+                        if (e.NewValue == CheckState.Checked)
+                        {
+                            versionListBox.SetItemChecked(0, false);
+                        }
+                    }
+                };
+
+                Button okButton = new Button
+                {
+                    Text = "Delete",
+                    DialogResult = DialogResult.OK,
+                    Location = new System.Drawing.Point(230, 225),
+                    Size = new System.Drawing.Size(75, 25)
+                };
+                selectionForm.Controls.Add(okButton);
+                selectionForm.AcceptButton = okButton;
+
+                Button cancelButton = new Button
+                {
+                    Text = "Cancel",
+                    DialogResult = DialogResult.Cancel,
+                    Location = new System.Drawing.Point(310, 225),
+                    Size = new System.Drawing.Size(75, 25)
+                };
+                selectionForm.Controls.Add(cancelButton);
+                selectionForm.CancelButton = cancelButton;
+
+                if (selectionForm.ShowDialog(this) == DialogResult.OK)
+                {
+                    var selected = new List<string>();
+                    
+                    if (versionListBox.GetItemChecked(0))
+                    {
+                        // "Delete All" selected
+                        selected.Add("ALL");
+                    }
+                    else
+                    {
+                        // Get selected individual versions
+                        for (int i = 1; i < versionListBox.Items.Count; i++)
+                        {
+                            if (versionListBox.GetItemChecked(i))
+                            {
+                                // Map display name back to folder name
+                                string displayName = versionListBox.Items[i].ToString()!;
+                                string? folderName = versionMap.FirstOrDefault(x => x.Value == displayName).Key;
+                                if (!string.IsNullOrEmpty(folderName))
+                                {
+                                    selected.Add(folderName);
+                                }
+                            }
+                        }
+                    }
+                    
+                    return selected;
+                }
+                
+                return null; // User cancelled
             }
         }
 
